@@ -1,22 +1,21 @@
 import { isNullOrUndefined } from 'util';
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
-var helpAuthor: string;
+var helpAuthor: string | undefined;
 var projectName: string | undefined;
 let xml2js = require('xml2js');
 var parser = new xml2js.Parser({ explicitArray: false });
 export function activate(context: vscode.ExtensionContext) {
-	vscode.window.setStatusBarMessage('Hello TiRa');
 	projectName = context.workspaceState.get("project");
 	if (isNullOrUndefined(projectName)) {
 		projectName = "slagman";
 	}
+	helpAuthor = context.workspaceState.get("author");
+	if (isNullOrUndefined(helpAuthor)) {
+		helpAuthor = "TiRa";
+	}
+	vscode.window.setStatusBarMessage('Hello ' + helpAuthor);
 	let disposable = vscode.commands.registerCommand('HelpTools.CreateNewClass', (url) => {
-		let author: string | undefined = context.workspaceState.get("author");
-		if (isNullOrUndefined(author)) {
-			author = "TiRa";
-		}
-		helpAuthor = author;
 		vscode.window.showInputBox({
 			prompt: "输入生成类名"
 		}).then(className => {
@@ -29,13 +28,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
-	let skinFolderUri = vscode.Uri.parse(rootUrl() + "/slagman/resource/skins");
+	let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins");
 	disposable = vscode.commands.registerCommand('HelpTools.CreateNewSkinClass', (url) => {
-		let author: string | undefined = context.workspaceState.get("author");
-		if (isNullOrUndefined(author)) {
-			author = "TiRa";
-		}
-		helpAuthor = author;
 		vscode.window.showInputBox({ prompt: "输入生成类名" }).then(className => {
 			if (className === undefined || className === "") {
 				return;
@@ -64,6 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 			context.workspaceState.update("author", authorName);
+			helpAuthor = authorName;
 		});
 	});
 	context.subscriptions.push(disposable);
@@ -96,7 +91,9 @@ export class ${className} {
 
 }
 `;
-	vscode.workspace.fs.writeFile(vscode.Uri.parse(url), stringToUint8Array(info));
+	vscode.workspace.fs.writeFile(vscode.Uri.parse(url), stringToUint8Array(info)).then(res => {
+		vscode.window.showTextDocument(vscode.Uri.file(url));
+	});
 }
 
 async function createNewSkinClass(url: vscode.Uri, skinName: string, classUrl: string, className: any): Promise<void> {
