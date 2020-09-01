@@ -1,11 +1,11 @@
 {
-	"name": "HelpTools",
-	"displayName": "HelpTools",
+	"name": "EgretHelp",
+	"displayName": "EgretHelp",
 	"description": "帮助工具",
 	"publisher": "TiRa",
-	"version": "0.0.10",
+	"version": "0.0.1",
 	"engines": {
-		"vscode": "^1.45.0"
+		"vscode": "^1.46.0"
 	},
 	"categories": [
 		"Other"
@@ -13,7 +13,8 @@
 	"activationEvents": [
 		"onCommand:HelpTools.CreateNewClass",
 		"onCommand:HelpTools.CreateNewSkinClass",
-		"onCommand:HelpTools.setAuthor"
+		"onCommand:HelpTools.setAuthor",
+		"onCommand:HelpTools.setProject"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -29,6 +30,10 @@
 			{
 				"command": "HelpTools.setAuthor",
 				"title": "setAuthor"
+			},
+			{
+				"command": "HelpTools.setProject",
+				"title": "setProject"
 			}
 		],
 		"menus": {
@@ -55,7 +60,7 @@
 		"test": "node ./out/test/runTest.js"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.45.0",
+		"@types/vscode": "^1.46.0",
 		"@types/glob": "^7.1.1",
 		"@types/mocha": "^7.0.2",
 		"@types/node": "^13.11.0",
