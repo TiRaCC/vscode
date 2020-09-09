@@ -27,9 +27,7 @@ function activate(context) {
     }
     vscode.window.setStatusBarMessage('Hello ' + helpAuthor);
     let disposable = vscode.commands.registerCommand('HelpTools.CreateNewClass', (url) => {
-        vscode.window.showInputBox({
-            prompt: "输入生成类名"
-        }).then(className => {
+        vscode.window.showInputBox({ prompt: "InputClassName" }).then(className => {
             if (className === undefined || className === "") {
                 return;
             }
@@ -40,7 +38,7 @@ function activate(context) {
     context.subscriptions.push(disposable);
     let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins");
     disposable = vscode.commands.registerCommand('HelpTools.CreateNewSkinClass', (url) => {
-        vscode.window.showInputBox({ prompt: "输入生成类名" }).then(className => {
+        vscode.window.showInputBox({ prompt: "InputClassName" }).then(className => {
             if (className === undefined || className === "") {
                 return;
             }
@@ -59,10 +57,8 @@ function activate(context) {
         });
     });
     context.subscriptions.push(disposable);
-    disposable = vscode.commands.registerCommand('HelpTools.setAuthor', (uri) => {
-        vscode.window.showInputBox({
-            prompt: "输入作者"
-        }).then(authorName => {
+    disposable = vscode.commands.registerCommand('HelpTools.setAuthor', () => {
+        vscode.window.showInputBox({ value: helpAuthor, prompt: "InputAuthor" }).then(authorName => {
             if (authorName === undefined) {
                 return;
             }
@@ -71,11 +67,8 @@ function activate(context) {
         });
     });
     context.subscriptions.push(disposable);
-    disposable = vscode.commands.registerCommand('HelpTools.setProject', (uri) => {
-        vscode.window.showInputBox({
-            value: projectName,
-            prompt: "输入项目名"
-        }).then(name => {
+    disposable = vscode.commands.registerCommand('HelpTools.setProject', () => {
+        vscode.window.showInputBox({ value: projectName, prompt: "InputProjectName" }).then(name => {
             if (name === undefined) {
                 return;
             }
@@ -89,34 +82,28 @@ exports.activate = activate;
 function deactivate() { }
 exports.deactivate = deactivate;
 function CreateNewClass(url, className) {
-    let date = new Date();
-    let dateStr = date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
     let info = `
 /**
  * @author ${helpAuthor}
- * @create ${dateStr}
+ * @create ${getDateInfo()}
  */
 export class ${className} {
 
 }
 `;
-    vscode.workspace.fs.writeFile(vscode.Uri.parse(url), stringToUint8Array(info)).then(res => {
+    vscode.workspace.fs.writeFile(vscode.Uri.parse(url), stringToUint8Array(info)).then(() => {
         vscode.window.showTextDocument(vscode.Uri.file(url));
     });
 }
 function createNewSkinClass(url, skinName, classUrl, className) {
     return __awaiter(this, void 0, void 0, function* () {
-        let subNodes = {};
-        let idNodes = yield analysisTarget(url, false, subNodes);
-        let skinItem = { content: "", importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" };
-        skinItem = yield traceChild(skinItem, idNodes, false, subNodes);
-        let date = new Date();
-        let dateStr = date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
+        let idNodes = yield analysisTarget(url);
+        let skinItem = yield traceChild(idNodes);
         let info = `import {UIComponent, setSkin${skinItem.importItem.length > 0 ? ", " + skinItem.importItem.join(", ") : ""}} from "solar";
 import {box} from "../../common/box";
 /**
  * @author ${helpAuthor}
- * @create ${dateStr}
+ * @create ${getDateInfo()}
  */
 export class ${className} extends UIComponent {
 	constructor() {
@@ -167,84 +154,118 @@ function convertUnderline(str, ucFirst = false) {
     return str;
 }
 //解析子集
-function analysisChild(data, isItem = false, subNodes) {
-    let idNodes = [];
-    let prevListID;
-    let isRender;
-    let findChildFun = function (parent, type) {
-        if (typeof parent !== "object") {
-            return;
+function analysisJson(data, isMain = false) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let idNodes = [];
+        if (data["e:Skin"]) {
+            data = data["e:Skin"];
         }
-        for (var tempProperty in parent) {
-            if (tempProperty === "__proto__" ||
-                tempProperty === "e:ArrayCollection" ||
-                tempProperty === "e:layout" ||
-                tempProperty === "solar:skinName") {
+        for (let key in data) {
+            if (key === "__proto__" ||
+                key === "$" ||
+                key === "e:ArrayCollection" ||
+                key === "e:layout" ||
+                key === "solar:skinName") {
                 continue;
             }
-            if (tempProperty === "e:itemRendererSkinName") {
-                isRender = true;
-            }
-            var tempChild = parent[tempProperty];
-            if (tempChild === null || tempChild === undefined) {
+            let item = data[key];
+            if (item === null || item === undefined) {
                 continue;
             }
-            if (tempChild.id !== null && tempChild.id !== undefined) {
-                if (tempChild.id === "rect" || tempChild.id === "contentNode") {
-                    continue;
-                }
-                let data = { type: type, id: tempChild.id };
-                if (!isItem && tempChild.itemRendererSkinName) {
-                    data.skin = tempChild.itemRendererSkinName;
-                }
-                else if (!isItem && (type === "solar:Component" || type === "e:Component") && tempChild.skinName) {
-                    data.skin = tempChild.skinName;
-                }
-                if (isRender && prevListID && subNodes) {
-                    subNodes[prevListID] = subNodes[prevListID] || [];
-                    subNodes[prevListID].push(data);
-                }
-                else {
-                    idNodes.push(data);
-                }
-                if (!prevListID && !isItem && (type === "e:List" || type === "solar:List") && !tempChild.itemRendererSkinName) {
-                    prevListID = tempChild.id;
-                }
+            let _comType;
+            if (Boolean(key === "e:Group" || key === "solar:Group" || key === "e:Scroller" || key === "solar:Scroller")) {
+                _comType = comType.group;
             }
-            if (tempProperty === "e:List" || tempProperty === "solar:List") {
-                prevListID = "";
-                isRender = false;
-                findChildFun(tempChild, tempProperty);
-                prevListID = "";
-                isRender = false;
+            else if (Boolean(key === "e:Component" || key === "solar:Component")) {
+                _comType = comType.component;
             }
-            else if (tempProperty.indexOf('e:') === 0 || tempProperty.indexOf("solar:") === 0 || tempProperty.indexOf("ns1:") === 0) {
-                findChildFun(tempChild, tempProperty);
+            else if (Boolean(key === "e:Button" || key === "solar:Button")) {
+                _comType = comType.button;
+            }
+            else if (Boolean(key === "e:List" || key === "solar:List")) {
+                _comType = comType.list;
+            }
+            else if (Boolean(key === "e:Tab" || key === "solar:Tab")) {
+                _comType = comType.tab;
             }
             else {
-                findChildFun(tempChild, type);
+                _comType = comType.normal;
+            }
+            let isArrItem = Boolean(item instanceof Array && item[0]);
+            let items;
+            if (isArrItem) {
+                items = item;
+            }
+            else {
+                items = [item];
+            }
+            for (let i = 0; i < items.length; i++) {
+                let oneItem = items[i];
+                if (oneItem && oneItem["$"] && oneItem["$"]["id"]) {
+                    let nodes = { type: key, id: oneItem["$"]["id"], comType: _comType };
+                    if (nodes.id === "rect" || nodes.id === "contentNode") {
+                        continue;
+                    }
+                    if (_comType === comType.button && oneItem["$"]["notice"]) {
+                        continue;
+                    }
+                    if ((_comType === comType.list || _comType === comType.tab) && oneItem["$"]["itemRendererSkinName"]) {
+                        nodes.className = oneItem["$"]["itemRendererSkinName"];
+                    }
+                    else if (_comType === comType.component && oneItem["$"]["skinName"]) {
+                        nodes.className = oneItem["$"]["skinName"];
+                    }
+                    else if ((_comType === comType.list || _comType === comType.tab || _comType === comType.component) && oneItem["e:itemRendererSkinName"]) {
+                        nodes.className = nodes.id;
+                        nodes.nodes = yield analysisJson(oneItem["e:itemRendererSkinName"], true);
+                    }
+                    if (nodes.className) {
+                        if (!nodes.nodes) {
+                            let _skinUrl = yield getSkinUrl(nodes.className);
+                            if (_skinUrl !== undefined) {
+                                nodes.nodes = yield analysisTarget(_skinUrl);
+                            }
+                        }
+                        nodes.className = convertUnderline(nodes.className);
+                        if (_comType === comType.component) {
+                            nodes.className = "IExml" + nodes.className;
+                            nodes.type = nodes.className;
+                        }
+                        else {
+                            nodes.className = nodes.className + "ItemRenderer";
+                        }
+                    }
+                    nodes.type = nodes.type.replace("ns1:", "");
+                    nodes.type = nodes.type.replace("e:", "eui.");
+                    nodes.type = nodes.type.replace("solar:", "solar.");
+                    idNodes.push(nodes);
+                }
+                if (_comType === comType.group && oneItem) {
+                    idNodes = idNodes.concat(yield analysisJson(oneItem));
+                }
             }
         }
-    };
-    findChildFun(data, "e:skin");
-    idNodes.sort((a, b) => {
-        if (a.skin && !b.skin) {
-            return -1;
+        if (isMain) {
+            idNodes.sort((a, b) => {
+                if (a.className && !b.className) {
+                    return -1;
+                }
+                else if (!a.className && b.className) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            });
         }
-        else if (!a.skin && b.skin) {
-            return 1;
-        }
-        else {
-            return 0;
-        }
+        return idNodes;
     });
-    return idNodes;
 }
-function analysisTarget(url, isItem = false, subNodes) {
+function analysisTarget(url) {
     return __awaiter(this, void 0, void 0, function* () {
         let data = yield vscode.workspace.fs.readFile(url);
         let json = yield parseString(Uint8ArrayToString(data));
-        return analysisChild(json, isItem, subNodes);
+        return analysisJson(json, true);
     });
 }
 function parseString(str) {
@@ -269,116 +290,73 @@ function getSkinUrl(skinName) {
         }
     });
 }
-function traceChild(skinItem, idNodes, isItem = false, subNodes) {
-    return __awaiter(this, void 0, void 0, function* () {
-        let skinArr = [];
-        for (let i = 0, len = idNodes.length; i < len; i++) {
-            let element = idNodes[i];
-            let _arr = [];
-            if (element.skin && skinArr.indexOf(element.skin) === -1) {
-                skinArr.push(element.skin);
-                let _skinUrl = yield getSkinUrl(element.skin);
-                if (_skinUrl !== undefined) {
-                    let _childNodes = yield analysisTarget(_skinUrl, true);
-                    _arr.push(traceChild({ content: "", importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" }, _childNodes, true));
+function traceChild(idNodes) {
+    let skinItem = { importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" };
+    for (let i = 0, len = idNodes.length; i < len; i++) {
+        let element = idNodes[i];
+        if (skinItem.declareInfo !== "") {
+            skinItem.declareInfo += "\n";
+        }
+        skinItem.declareInfo += `	private ${element.id}: ${element.type};`;
+        if (element.comType === comType.button) {
+            if (skinItem.eventInfo !== "") {
+                skinItem.eventInfo += "\n";
+            }
+            if (skinItem.funInfo !== "") {
+                skinItem.funInfo += "\n";
+            }
+            let FuncName = "on" + convertUnderline(element.id, true) + 'Handler';
+            skinItem.eventInfo += `		this.tap(this.${element.id}, this.${FuncName}, this);`;
+            skinItem.funInfo += `	private ${FuncName}(): void {
+				
+	}`;
+        }
+        else if (element.nodes) {
+            let childItem = traceChild(element.nodes);
+            for (let j = 0; j < childItem.importItem.length; j++) {
+                if (skinItem.importItem.indexOf(childItem.importItem[i])) {
+                    skinItem.importItem.push(childItem.importItem[i]);
                 }
             }
-            else if (subNodes && subNodes[element.id]) {
-                element.skin = element.id;
-                let _childNodes = subNodes[element.id];
-                _arr.push(traceChild({ content: "", importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" }, _childNodes, true));
+            if (skinItem.classInfo !== "") {
+                skinItem.classInfo += "\n";
             }
-            let _childItem;
-            let _arr1 = yield Promise.all(_arr);
-            if (_arr1 && _arr1.length > 0 && _arr1[0]) {
-                _childItem = _arr1[0];
-                for (let i = 0, len = _childItem.importItem.length; i < len; i++) {
-                    if (skinItem.importItem.indexOf(_childItem.importItem[i]) === -1) {
-                        skinItem.importItem.push(_childItem.importItem[i]);
-                    }
+            if (element.comType === comType.component) {
+                while (childItem.declareInfo.indexOf("private ") !== -1) {
+                    childItem.declareInfo = childItem.declareInfo.replace("private ", "");
                 }
+                skinItem.classInfo += `interface ${element.className} {
+${childItem.declareInfo}
+}`;
             }
             else {
-                _childItem = undefined;
-            }
-            let eType = "";
-            if ((element.type === "solar:Component" || element.type === "e:Component") && element.skin) {
-                eType = "IExml" + element.skin;
-            }
-            else if (element.type.indexOf("e:") === 0) {
-                eType = "eui." + element.type.substr(2);
-                if (skinItem.importItem.indexOf("Item") === -1) {
+                if (skinItem.importItem.indexOf("Item")) {
                     skinItem.importItem.push("Item");
                 }
-            }
-            else if (element.type.indexOf("ns1:") === 0) {
-                eType = element.type.substr(4);
-            }
-            else {
-                eType = element.type.substr(6);
-                if (skinItem.importItem.indexOf(eType) === -1) {
-                    skinItem.importItem.push(eType);
-                }
-            }
-            if (skinItem.declareInfo !== "") {
-                skinItem.declareInfo += "\n";
-            }
-            skinItem.declareInfo += `	private ${element.id}: ${eType};`;
-            if (eType === "Button" || eType === "eui.Button") {
                 if (skinItem.eventInfo !== "") {
                     skinItem.eventInfo += "\n";
                 }
-                let FuncName = "on" + convertUnderline(element.id, true) + 'Handler';
-                skinItem.eventInfo += `		this.tap(this.${element.id}, this.${FuncName}, this);`;
-                if (skinItem.funInfo !== "") {
-                    skinItem.funInfo += "\n";
-                }
-                skinItem.funInfo += `	private ${FuncName}(): void {
-				
-	}`;
-            }
-            else if (element.skin) {
-                if (element.type === "solar:Component" || element.type === "e:Component") {
-                    if (_childItem) {
-                        if (skinItem.classInfo !== "") {
-                            skinItem.classInfo += "\n";
-                        }
-                        while (_childItem.declareInfo.indexOf("private ") !== -1) {
-                            _childItem.declareInfo = _childItem.declareInfo.replace("private ", "");
-                        }
-                        skinItem.classInfo += `interface ${eType} {
-${_childItem.declareInfo}
-}`;
-                    }
-                }
-                else {
-                    if (skinItem.eventInfo !== "") {
-                        skinItem.eventInfo += "\n";
-                    }
-                    let className = `${convertUnderline(element.skin, true)}ItemRenderer`;
-                    skinItem.eventInfo += `		this.${element.id}.itemRenderer = ${className};`;
-                    if (_childItem) {
-                        if (skinItem.classInfo !== "") {
-                            skinItem.classInfo += "\n";
-                        }
-                        skinItem.classInfo += `class ${className} extends Item {
-${_childItem.declareInfo}
+                skinItem.eventInfo += `		this.${element.id}.itemRenderer = ${element.className};`;
+                skinItem.classInfo += `class ${element.className} extends Item {
+${childItem.declareInfo}
 	onDataUpdate(data) {
 		if (data) {
 								
 		}
 	}
-${_childItem.eventInfo ? `	onReady() {
-${_childItem.eventInfo}
+${childItem.eventInfo ? `	onReady() {
+${childItem.eventInfo}
 	}` : ""}
-${_childItem.funInfo}
+${childItem.funInfo}
 }`;
-                    }
-                }
+            }
+            if (childItem.classInfo) {
+                skinItem.classInfo += "\n";
+                skinItem.classInfo += childItem.classInfo;
             }
         }
-        return skinItem;
-    });
+    }
+    return skinItem;
 }
 function rootUrl() {
     let rootUrl = vscode.workspace.rootPath;
@@ -388,4 +366,27 @@ function rootUrl() {
     ;
     return rootUrl || "";
 }
+function getDateInfo() {
+    let date = new Date();
+    let M = date.getMonth() + 1;
+    let D = date.getDate();
+    let H = date.getHours();
+    let Min = date.getMinutes();
+    let S = date.getSeconds();
+    M = M >= 10 ? M : "0" + M;
+    D = D >= 10 ? D : "0" + D;
+    H = H >= 10 ? H : "0" + H;
+    Min = Min >= 10 ? Min : "0" + Min;
+    S = S >= 10 ? S : "0" + S;
+    return date.getFullYear() + "-" + M + "-" + D + " " + H + ":" + Min + ":" + S;
+}
+var comType;
+(function (comType) {
+    comType[comType["normal"] = 0] = "normal";
+    comType[comType["group"] = 1] = "group";
+    comType[comType["component"] = 2] = "component";
+    comType[comType["button"] = 3] = "button";
+    comType[comType["list"] = 4] = "list";
+    comType[comType["tab"] = 5] = "tab";
+})(comType || (comType = {}));
 //# sourceMappingURL=extension.js.map

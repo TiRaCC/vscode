@@ -16,9 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 	vscode.window.setStatusBarMessage('Hello ' + helpAuthor);
 	let disposable = vscode.commands.registerCommand('HelpTools.CreateNewClass', (url) => {
-		vscode.window.showInputBox({
-			prompt: "输入生成类名"
-		}).then(className => {
+		vscode.window.showInputBox({ prompt: "InputClassName" }).then(className => {
 			if (className === undefined || className === "") {
 				return;
 			}
@@ -30,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(disposable);
 	let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins");
 	disposable = vscode.commands.registerCommand('HelpTools.CreateNewSkinClass', (url) => {
-		vscode.window.showInputBox({ prompt: "输入生成类名" }).then(className => {
+		vscode.window.showInputBox({ prompt: "InputClassName" }).then(className => {
 			if (className === undefined || className === "") {
 				return;
 			}
@@ -50,10 +48,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(disposable);
 
-	disposable = vscode.commands.registerCommand('HelpTools.setAuthor', (uri) => {
-		vscode.window.showInputBox({
-			prompt: "输入作者"
-		}).then(authorName => {
+	disposable = vscode.commands.registerCommand('HelpTools.setAuthor', () => {
+		vscode.window.showInputBox({ value: helpAuthor, prompt: "InputAuthor" }).then(authorName => {
 			if (authorName === undefined) {
 				return;
 			}
@@ -63,11 +59,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(disposable);
 
-	disposable = vscode.commands.registerCommand('HelpTools.setProject', (uri) => {
-		vscode.window.showInputBox({
-			value: projectName,
-			prompt: "输入项目名"
-		}).then(name => {
+	disposable = vscode.commands.registerCommand('HelpTools.setProject', () => {
+		vscode.window.showInputBox({ value: projectName, prompt: "InputProjectName" }).then(name => {
 			if (name === undefined) {
 				return;
 			}
@@ -80,34 +73,28 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() { }
 function CreateNewClass(url: string, className: string): void {
-	let date = new Date();
-	let dateStr = date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
 	let info = `
 /**
  * @author ${helpAuthor}
- * @create ${dateStr}
+ * @create ${getDateInfo()}
  */
 export class ${className} {
 
 }
 `;
-	vscode.workspace.fs.writeFile(vscode.Uri.parse(url), stringToUint8Array(info)).then(res => {
+	vscode.workspace.fs.writeFile(vscode.Uri.parse(url), stringToUint8Array(info)).then(() => {
 		vscode.window.showTextDocument(vscode.Uri.file(url));
 	});
 }
 
 async function createNewSkinClass(url: vscode.Uri, skinName: string, classUrl: string, className: any): Promise<void> {
-	let subNodes = {};
-	let idNodes: IChildNodes[] = await analysisTarget(url, false, subNodes);
-	let skinItem: ISkinItem = { content: "", importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" };
-	skinItem = await traceChild(skinItem, idNodes, false, subNodes);
-	let date = new Date();
-	let dateStr = date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
+	let idNodes: IChildNodes[] = await analysisTarget(url);
+	let skinItem: ISkinItem = await traceChild(idNodes);
 	let info = `import {UIComponent, setSkin${skinItem.importItem.length > 0 ? ", " + skinItem.importItem.join(", ") : ""}} from "solar";
 import {box} from "../../common/box";
 /**
  * @author ${helpAuthor}
- * @create ${dateStr}
+ * @create ${getDateInfo()}
  */
 export class ${className} extends UIComponent {
 	constructor() {
@@ -160,81 +147,105 @@ function convertUnderline(str: string, ucFirst = false): string {
 	return str;
 }
 //解析子集
-function analysisChild(data: any, isItem: boolean = false, subNodes?: any): IChildNodes[] {
+async function analysisJson(data: any, isMain: boolean = false) {
 	let idNodes: IChildNodes[] = [];
-	let prevListID: string;
-	let isRender: boolean;
-	let findChildFun = function (parent: any, type: string) {
-		if (typeof parent !== "object") {
-			return;
+	if (data["e:Skin"]) {
+		data = data["e:Skin"];
+	}
+	for (let key in data) {
+		if (key === "__proto__" ||
+			key === "$" ||
+			key === "e:ArrayCollection" ||
+			key === "e:layout" ||
+			key === "solar:skinName") {
+			continue;
 		}
-		for (var tempProperty in parent) {
-			if (
-				tempProperty === "__proto__" ||
-				tempProperty === "e:ArrayCollection" ||
-				tempProperty === "e:layout" ||
-				tempProperty === "solar:skinName"
-			) {
-				continue;
-			}
-			if (tempProperty === "e:itemRendererSkinName") {
-				isRender = true;
-			}
-			var tempChild = parent[tempProperty];
-			if (tempChild === null || tempChild === undefined) {
-				continue;
-			}
-			if (tempChild.id !== null && tempChild.id !== undefined) {
-				if (tempChild.id === "rect" || tempChild.id === "contentNode") {
+		let item = data[key];
+		if (item === null || item === undefined) {
+			continue;
+		}
+		let _comType: number;
+		if (Boolean(key === "e:Group" || key === "solar:Group" || key === "e:Scroller" || key === "solar:Scroller")) {
+			_comType = comType.group;
+		} else if (Boolean(key === "e:Component" || key === "solar:Component")) {
+			_comType = comType.component;
+		} else if (Boolean(key === "e:Button" || key === "solar:Button")) {
+			_comType = comType.button;
+		} else if (Boolean(key === "e:List" || key === "solar:List")) {
+			_comType = comType.list;
+		} else if (Boolean(key === "e:Tab" || key === "solar:Tab")) {
+			_comType = comType.tab;
+		} else {
+			_comType = comType.normal;
+		}
+		let isArrItem: boolean = Boolean(item instanceof Array && item[0]);
+		let items: Array<any>;
+		if (isArrItem) {
+			items = item;
+		} else {
+			items = [item];
+		}
+		for (let i = 0; i < items.length; i++) {
+			let oneItem = items[i];
+			if (oneItem && oneItem["$"] && oneItem["$"]["id"]) {
+				let nodes: IChildNodes = { type: key, id: oneItem["$"]["id"], comType: _comType };
+				if (nodes.id === "rect" || nodes.id === "contentNode") {
 					continue;
 				}
-				let data: IChildNodes = { type: type, id: tempChild.id };
-				if (!isItem && tempChild.itemRendererSkinName) {
-					data.skin = tempChild.itemRendererSkinName;
-				} else if (!isItem && (type === "solar:Component" || type === "e:Component") && tempChild.skinName) {
-					data.skin = tempChild.skinName;
+				if (_comType === comType.button && oneItem["$"]["notice"]) {
+					continue;
 				}
-				if (isRender && prevListID && subNodes) {
-					subNodes[prevListID] = subNodes[prevListID] || [];
-					subNodes[prevListID].push(data);
-				} else {
-					idNodes.push(data);
+				if ((_comType === comType.list || _comType === comType.tab) && oneItem["$"]["itemRendererSkinName"]) {
+					nodes.className = oneItem["$"]["itemRendererSkinName"];
+				} else if (_comType === comType.component && oneItem["$"]["skinName"]) {
+					nodes.className = oneItem["$"]["skinName"];
+				} else if ((_comType === comType.list || _comType === comType.tab || _comType === comType.component) && oneItem["e:itemRendererSkinName"]) {
+					nodes.className = nodes.id;
+					nodes.nodes = await analysisJson(oneItem["e:itemRendererSkinName"], true);
 				}
-				if (!prevListID && !isItem && (type === "e:List" || type === "solar:List") && !tempChild.itemRendererSkinName) {
-					prevListID = tempChild.id;
+				if (nodes.className) {
+					if (!nodes.nodes) {
+						let _skinUrl = await getSkinUrl(nodes.className);
+						if (_skinUrl !== undefined) {
+							nodes.nodes = await analysisTarget(_skinUrl);
+						}
+					}
+					nodes.className = convertUnderline(nodes.className);
+					if (_comType === comType.component) {
+						nodes.className = "IExml" + nodes.className;
+						nodes.type = nodes.className;
+					} else {
+						nodes.className = nodes.className + "ItemRenderer";
+					}
 				}
+				nodes.type = nodes.type.replace("ns1:", "");
+				nodes.type = nodes.type.replace("e:", "eui.");
+				nodes.type = nodes.type.replace("solar:", "solar.");
+				idNodes.push(nodes);
 			}
-			if (tempProperty === "e:List" || tempProperty === "solar:List") {
-				prevListID = "";
-				isRender = false;
-				findChildFun(tempChild, tempProperty);
-				prevListID = "";
-				isRender = false;
-			} else if (tempProperty.indexOf('e:') === 0 || tempProperty.indexOf("solar:") === 0 || tempProperty.indexOf("ns1:") === 0) {
-				findChildFun(tempChild, tempProperty);
+			if (_comType === comType.group && oneItem) {
+				idNodes = idNodes.concat(await analysisJson(oneItem));
 			}
-			else {
-				findChildFun(tempChild, type);
-			}
-
 		}
-	};
-	findChildFun(data, "e:skin");
-	idNodes.sort((a: IChildNodes, b: IChildNodes) => {
-		if (a.skin && !b.skin) {
-			return -1;
-		} else if (!a.skin && b.skin) {
-			return 1;
-		} else {
-			return 0;
-		}
-	});
+	}
+	if (isMain) {
+		idNodes.sort((a: IChildNodes, b: IChildNodes) => {
+			if (a.className && !b.className) {
+				return -1;
+			} else if (!a.className && b.className) {
+				return 1;
+			} else {
+				return 0;
+			}
+		});
+	}
 	return idNodes;
 }
-async function analysisTarget(url: vscode.Uri, isItem: boolean = false, subNodes?: any) {
+
+async function analysisTarget(url: vscode.Uri) {
 	let data = await vscode.workspace.fs.readFile(url);
 	let json = await parseString(Uint8ArrayToString(data));
-	return analysisChild(json, isItem, subNodes);
+	return analysisJson(json, true);
 }
 
 async function parseString(str: string) {
@@ -257,106 +268,70 @@ async function getSkinUrl(skinName?: string) {
 	}
 }
 
-async function traceChild(skinItem: ISkinItem, idNodes: IChildNodes[], isItem: boolean = false, subNodes?: any): Promise<ISkinItem> {
-	let skinArr: Array<string> = [];
+function traceChild(idNodes: IChildNodes[]) {
+	let skinItem: ISkinItem = { importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" };
 	for (let i: number = 0, len: number = idNodes.length; i < len; i++) {
 		let element: IChildNodes = idNodes[i];
-		let _arr = [];
-		if (element.skin && skinArr.indexOf(element.skin) === -1) {
-			skinArr.push(element.skin);
-			let _skinUrl = await getSkinUrl(element.skin);
-			if (_skinUrl !== undefined) {
-				let _childNodes: IChildNodes[] = await analysisTarget(_skinUrl, true);
-				_arr.push(traceChild({ content: "", importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" }, _childNodes, true));
-			}
-		} else if (subNodes && subNodes[element.id]) {
-			element.skin = element.id;
-			let _childNodes: IChildNodes[] = subNodes[element.id];
-			_arr.push(traceChild({ content: "", importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" }, _childNodes, true));
-		}
-		let _childItem: ISkinItem | undefined;
-		let _arr1 = await Promise.all(_arr);
-		if (_arr1 && _arr1.length > 0 && _arr1[0]) {
-			_childItem = _arr1[0];
-			for (let i: number = 0, len: number = _childItem.importItem.length; i < len; i++) {
-				if (skinItem.importItem.indexOf(_childItem.importItem[i]) === -1) {
-					skinItem.importItem.push(_childItem.importItem[i]);
-				}
-			}
-		} else {
-			_childItem = undefined;
-		}
-		let eType = "";
-		if ((element.type === "solar:Component" || element.type === "e:Component") && element.skin) {
-			eType = "IExml" + element.skin;
-		} else if (element.type.indexOf("e:") === 0) {
-			eType = "eui." + element.type.substr(2);
-			if (skinItem.importItem.indexOf("Item") === -1) {
-				skinItem.importItem.push("Item");
-			}
-		} else if (element.type.indexOf("ns1:") === 0) {
-			eType = element.type.substr(4);
-		} else {
-			eType = element.type.substr(6);
-			if (skinItem.importItem.indexOf(eType) === -1) {
-				skinItem.importItem.push(eType);
-			}
-		}
 		if (skinItem.declareInfo !== "") {
 			skinItem.declareInfo += "\n";
 		}
-		skinItem.declareInfo += `	private ${element.id}: ${eType};`;
-		if (eType === "Button" || eType === "eui.Button") {
+		skinItem.declareInfo += `	private ${element.id}: ${element.type};`;
+		if (element.comType === comType.button) {
 			if (skinItem.eventInfo !== "") {
 				skinItem.eventInfo += "\n";
 			}
-			let FuncName = "on" + convertUnderline(element.id, true) + 'Handler';
-			skinItem.eventInfo += `		this.tap(this.${element.id}, this.${FuncName}, this);`;
 			if (skinItem.funInfo !== "") {
 				skinItem.funInfo += "\n";
 			}
+			let FuncName = "on" + convertUnderline(element.id, true) + 'Handler';
+			skinItem.eventInfo += `		this.tap(this.${element.id}, this.${FuncName}, this);`;
 			skinItem.funInfo += `	private ${FuncName}(): void {
 				
 	}`;
-		} else if (element.skin) {
-			if (element.type === "solar:Component" || element.type === "e:Component") {
-				if (_childItem) {
-					if (skinItem.classInfo !== "") {
-						skinItem.classInfo += "\n";
-					}
-					while (_childItem.declareInfo.indexOf("private ") !== -1) {
-						_childItem.declareInfo = _childItem.declareInfo.replace("private ", "");
-					}
-					skinItem.classInfo += `interface ${eType} {
-${_childItem.declareInfo}
-}`;
+		} else if (element.nodes) {
+			let childItem: ISkinItem = traceChild(element.nodes);
+			for (let j = 0; j < childItem.importItem.length; j++) {
+				if (skinItem.importItem.indexOf(childItem.importItem[i])) {
+					skinItem.importItem.push(childItem.importItem[i]);
 				}
+			}
+			if (skinItem.classInfo !== "") {
+				skinItem.classInfo += "\n";
+			}
+			if (element.comType === comType.component) {
+				while (childItem.declareInfo.indexOf("private ") !== -1) {
+					childItem.declareInfo = childItem.declareInfo.replace("private ", "");
+				}
+				skinItem.classInfo += `interface ${element.className} {
+${childItem.declareInfo}
+}`;
 			} else {
+				if (skinItem.importItem.indexOf("Item")) {
+					skinItem.importItem.push("Item");
+				}
 				if (skinItem.eventInfo !== "") {
 					skinItem.eventInfo += "\n";
 				}
-				let className = `${convertUnderline(element.skin, true)}ItemRenderer`;
-				skinItem.eventInfo += `		this.${element.id}.itemRenderer = ${className};`;
-				if (_childItem) {
-					if (skinItem.classInfo !== "") {
-						skinItem.classInfo += "\n";
-					}
-					skinItem.classInfo += `class ${className} extends Item {
-${_childItem.declareInfo}
+				skinItem.eventInfo += `		this.${element.id}.itemRenderer = ${element.className};`;
+				skinItem.classInfo += `class ${element.className} extends Item {
+${childItem.declareInfo}
 	onDataUpdate(data) {
 		if (data) {
 								
 		}
 	}
-${_childItem.eventInfo ? `	onReady() {
-${_childItem.eventInfo}
+${childItem.eventInfo ? `	onReady() {
+${childItem.eventInfo}
 	}`: ""}
-${_childItem.funInfo}
+${childItem.funInfo}
 }`;
-				}
+
+			}
+			if (childItem.classInfo) {
+				skinItem.classInfo += "\n";
+				skinItem.classInfo += childItem.classInfo;
 			}
 		}
-
 	}
 	return skinItem;
 }
@@ -369,20 +344,44 @@ function rootUrl(): string {
 	return rootUrl || "";
 }
 
+function getDateInfo(): string {
+	let date = new Date();
+	let M: any = date.getMonth() + 1;
+	let D: any = date.getDate();
+	let H: any = date.getHours();
+	let Min: any = date.getMinutes();
+	let S: any = date.getSeconds();
+	M = M >= 10 ? M : "0" + M;
+	D = D >= 10 ? D : "0" + D;
+	H = H >= 10 ? H : "0" + H;
+	Min = Min >= 10 ? Min : "0" + Min;
+	S = S >= 10 ? S : "0" + S;
+	return date.getFullYear() + "-" + M + "-" + D + " " + H + ":" + Min + ":" + S;
+}
+
+enum comType {
+	normal,
+	group,
+	component,
+	button,
+	list,
+	tab,
+}
+
 
 
 interface IChildNodes {
 	type: string;
 	id: string;
-	skin?: string;
+	comType: number;
+	className?: string;
+	nodes?: IChildNodes[];
 }
 
 interface ISkinItem {
-	content: string;//内容
 	importItem: Array<string>;//进入项
 	declareInfo: string;//声明变量
 	eventInfo: string;//事件内容
 	funInfo: string;//方法内容
 	classInfo: string;//新加类内容
 }
-
