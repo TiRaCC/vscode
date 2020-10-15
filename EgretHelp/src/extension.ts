@@ -1,4 +1,3 @@
-import { isNullOrUndefined } from 'util';
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
 var helpAuthor: string | undefined;
@@ -7,11 +6,11 @@ let xml2js = require('xml2js');
 var parser = new xml2js.Parser({ explicitArray: false });
 export function activate(context: vscode.ExtensionContext) {
 	projectName = context.workspaceState.get("project");
-	if (isNullOrUndefined(projectName)) {
+	if (!projectName) {
 		projectName = "slagman";
 	}
 	helpAuthor = context.workspaceState.get("author");
-	if (isNullOrUndefined(helpAuthor)) {
+	if (!helpAuthor) {
 		helpAuthor = "TiRa";
 	}
 	vscode.window.setStatusBarMessage('Hello ' + helpAuthor);
@@ -26,13 +25,14 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
-	let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins");
-	disposable = vscode.commands.registerCommand('HelpTools.CreateNewSkinClass', (url) => {
+	disposable = vscode.commands.registerCommand('HelpTools.CreateNewSkinClass', (url: vscode.Uri) => {
 		vscode.window.showInputBox({ prompt: "InputClassName" }).then(className => {
 			if (className === undefined || className === "") {
 				return;
 			}
 			className = convertUnderline(className, true);
+			let modName = url.path.substr(url.path.lastIndexOf("/") + 1);
+			let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins/" + modName);
 			vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, defaultUri: skinFolderUri, openLabel: "选择一个exml文件" }).then(function (skinUri?: Uri[]): void {
 				if (skinUri === undefined) {
 					return;
@@ -173,7 +173,7 @@ async function analysisJson(data: any, isMain: boolean = false) {
 			_comType = comType.button;
 		} else if (Boolean(key === "e:List" || key === "solar:List")) {
 			_comType = comType.list;
-		} else if (Boolean(key === "e:Tab" || key === "solar:Tab")) {
+		} else if (Boolean(key === "e:TabBar" || key === "solar:TabBar")) {
 			_comType = comType.tab;
 		} else {
 			_comType = comType.normal;
@@ -197,11 +197,23 @@ async function analysisJson(data: any, isMain: boolean = false) {
 				}
 				if ((_comType === comType.list || _comType === comType.tab) && oneItem["$"]["itemRendererSkinName"]) {
 					nodes.className = oneItem["$"]["itemRendererSkinName"];
+					// if (nodes.className === "CommonItemIconSkin") {
+					// 	nodes.className = "";
+					// }
 				} else if (_comType === comType.component && oneItem["$"]["skinName"]) {
 					nodes.className = oneItem["$"]["skinName"];
-				} else if ((_comType === comType.list || _comType === comType.tab || _comType === comType.component) && oneItem["e:itemRendererSkinName"]) {
+					if (nodes.className === "CommonPlayerHeadSkin") {
+						nodes.className = "";
+					}
+				} else if ((_comType === comType.list || _comType === comType.tab) && oneItem["e:itemRendererSkinName"]) {
 					nodes.className = nodes.id;
 					nodes.nodes = await analysisJson(oneItem["e:itemRendererSkinName"], true);
+				} else if (_comType === comType.component && oneItem["solar:skinName"]) {
+					nodes.className = nodes.id;
+					nodes.nodes = await analysisJson(oneItem["solar:skinName"], true);
+				} else if (_comType === comType.component && oneItem["e:skinName"]) {
+					nodes.className = nodes.id;
+					nodes.nodes = await analysisJson(oneItem["e:skinName"], true);
 				}
 				if (nodes.className) {
 					if (!nodes.nodes) {

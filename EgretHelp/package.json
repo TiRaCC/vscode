@@ -3,7 +3,7 @@
 	"displayName": "EgretHelp",
 	"description": "帮助工具",
 	"publisher": "TiRa",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"engines": {
 		"vscode": "^1.46.0"
 	},

@@ -10,7 +10,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
-const util_1 = require("util");
 const vscode = require("vscode");
 var helpAuthor;
 var projectName;
@@ -18,11 +17,11 @@ let xml2js = require('xml2js');
 var parser = new xml2js.Parser({ explicitArray: false });
 function activate(context) {
     projectName = context.workspaceState.get("project");
-    if (util_1.isNullOrUndefined(projectName)) {
+    if (!projectName) {
         projectName = "slagman";
     }
     helpAuthor = context.workspaceState.get("author");
-    if (util_1.isNullOrUndefined(helpAuthor)) {
+    if (!helpAuthor) {
         helpAuthor = "TiRa";
     }
     vscode.window.setStatusBarMessage('Hello ' + helpAuthor);
@@ -36,13 +35,14 @@ function activate(context) {
         });
     });
     context.subscriptions.push(disposable);
-    let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins");
     disposable = vscode.commands.registerCommand('HelpTools.CreateNewSkinClass', (url) => {
         vscode.window.showInputBox({ prompt: "InputClassName" }).then(className => {
             if (className === undefined || className === "") {
                 return;
             }
             className = convertUnderline(className, true);
+            let modName = url.path.substr(url.path.lastIndexOf("/") + 1);
+            let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins/" + modName);
             vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, defaultUri: skinFolderUri, openLabel: "选择一个exml文件" }).then(function (skinUri) {
                 if (skinUri === undefined) {
                     return;
@@ -185,7 +185,7 @@ function analysisJson(data, isMain = false) {
             else if (Boolean(key === "e:List" || key === "solar:List")) {
                 _comType = comType.list;
             }
-            else if (Boolean(key === "e:Tab" || key === "solar:Tab")) {
+            else if (Boolean(key === "e:TabBar" || key === "solar:TabBar")) {
                 _comType = comType.tab;
             }
             else {
@@ -211,13 +211,27 @@ function analysisJson(data, isMain = false) {
                     }
                     if ((_comType === comType.list || _comType === comType.tab) && oneItem["$"]["itemRendererSkinName"]) {
                         nodes.className = oneItem["$"]["itemRendererSkinName"];
+                        // if (nodes.className === "CommonItemIconSkin") {
+                        // 	nodes.className = "";
+                        // }
                     }
                     else if (_comType === comType.component && oneItem["$"]["skinName"]) {
                         nodes.className = oneItem["$"]["skinName"];
+                        if (nodes.className === "CommonPlayerHeadSkin") {
+                            nodes.className = "";
+                        }
                     }
-                    else if ((_comType === comType.list || _comType === comType.tab || _comType === comType.component) && oneItem["e:itemRendererSkinName"]) {
+                    else if ((_comType === comType.list || _comType === comType.tab) && oneItem["e:itemRendererSkinName"]) {
                         nodes.className = nodes.id;
                         nodes.nodes = yield analysisJson(oneItem["e:itemRendererSkinName"], true);
+                    }
+                    else if (_comType === comType.component && oneItem["solar:skinName"]) {
+                        nodes.className = nodes.id;
+                        nodes.nodes = yield analysisJson(oneItem["solar:skinName"], true);
+                    }
+                    else if (_comType === comType.component && oneItem["e:skinName"]) {
+                        nodes.className = nodes.id;
+                        nodes.nodes = yield analysisJson(oneItem["e:skinName"], true);
                     }
                     if (nodes.className) {
                         if (!nodes.nodes) {
