@@ -203,7 +203,7 @@ function analysisJson(data, isMain = false) {
                 let oneItem = items[i];
                 if (oneItem && oneItem["$"] && oneItem["$"]["id"]) {
                     let nodes = { type: key, id: oneItem["$"]["id"], comType: _comType };
-                    if (nodes.id === "rect" || nodes.id === "contentNode") {
+                    if (nodes.id === "rect") {
                         continue;
                     }
                     if (_comType === comType.button && oneItem["$"]["notice"]) {
@@ -308,6 +308,9 @@ function traceChild(idNodes) {
     let skinItem = { importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" };
     for (let i = 0, len = idNodes.length; i < len; i++) {
         let element = idNodes[i];
+        if (element.id === "contentNode" && element.type === "eui.Group") {
+            continue;
+        }
         if (skinItem.declareInfo !== "") {
             skinItem.declareInfo += "\n";
         }

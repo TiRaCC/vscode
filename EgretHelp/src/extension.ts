@@ -189,7 +189,7 @@ async function analysisJson(data: any, isMain: boolean = false) {
 			let oneItem = items[i];
 			if (oneItem && oneItem["$"] && oneItem["$"]["id"]) {
 				let nodes: IChildNodes = { type: key, id: oneItem["$"]["id"], comType: _comType };
-				if (nodes.id === "rect" || nodes.id === "contentNode") {
+				if (nodes.id === "rect") {
 					continue;
 				}
 				if (_comType === comType.button && oneItem["$"]["notice"]) {
@@ -284,6 +284,9 @@ function traceChild(idNodes: IChildNodes[]) {
 	let skinItem: ISkinItem = { importItem: [], declareInfo: "", eventInfo: "", funInfo: "", classInfo: "" };
 	for (let i: number = 0, len: number = idNodes.length; i < len; i++) {
 		let element: IChildNodes = idNodes[i];
+		if (element.id === "contentNode" && element.type === "eui.Group") {
+			continue;
+		}
 		if (skinItem.declareInfo !== "") {
 			skinItem.declareInfo += "\n";
 		}
