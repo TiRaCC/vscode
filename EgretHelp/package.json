@@ -3,7 +3,7 @@
 	"displayName": "EgretHelp",
 	"description": "帮助工具",
 	"publisher": "TiRa",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"engines": {
 		"vscode": "^1.46.0"
 	},
@@ -14,7 +14,8 @@
 		"onCommand:HelpTools.CreateNewClass",
 		"onCommand:HelpTools.CreateNewSkinClass",
 		"onCommand:HelpTools.setAuthor",
-		"onCommand:HelpTools.setProject"
+		"onCommand:HelpTools.setProject",
+		"onCommand:HelpTools.contrastExml"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -34,6 +35,10 @@
 			{
 				"command": "HelpTools.setProject",
 				"title": "setProject"
+			},
+			{
+				"command": "HelpTools.contrastExml",
+				"title": "contrastExml"
 			}
 		],
 		"menus": {

@@ -69,6 +69,37 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 	});
 	context.subscriptions.push(disposable);
+
+	disposable = vscode.commands.registerCommand('HelpTools.contrastExml', () => {
+		console.warn('HelpTools.contrastExml');
+		let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins/");
+		let skinUrl1: vscode.Uri, skinUrl2: vscode.Uri;
+		vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, defaultUri: skinFolderUri, openLabel: "请选择修改后的Exml" }).then(function (skinUri?: Uri[]): void {
+			if (skinUri === undefined) {
+				return;
+			}
+			if (skinUri[0].path.substring(skinUri[0].path.length - 5) !== ".exml") {
+				return;
+			}
+			skinUrl1 = skinUri[0];
+			vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, defaultUri: skinFolderUri, openLabel: "请选择要对比的Exml" }).then(function (skinUri?: Uri[]): void {
+				if (skinUri === undefined) {
+					return;
+				}
+				if (skinUri[0].path.substring(skinUri[0].path.length - 5) !== ".exml") {
+					return;
+				}
+				skinUrl2 = skinUri[0];
+				if (skinUrl1.path == skinUrl2.path) {
+					vscode.window.showErrorMessage('选择的两个Exml文件相同!');
+					return;
+				}
+				contrastExml(skinUrl1, skinUrl2);
+			});
+		});
+	});
+	context.subscriptions.push(disposable);
+
 }
 
 export function deactivate() { }
@@ -117,6 +148,51 @@ ${skinItem.classInfo}
 	vscode.workspace.fs.writeFile(vscode.Uri.parse(classUrl), stringToUint8Array(info)).then(() => {
 		vscode.window.showTextDocument(vscode.Uri.file(classUrl));
 	});
+}
+
+async function contrastExml(url1: vscode.Uri, url2: vscode.Uri): Promise<void> {
+	let idNodes1: IChildNodes[] = await analysisTarget(url1);
+	let idNodes2: IChildNodes[] = await analysisTarget(url2);
+	let content = contrastNodes(idNodes1, idNodes2);
+	vscode.workspace.openTextDocument({ content });
+}
+
+function contrastNodes(idNodes1: IChildNodes[], idNodes2: IChildNodes[], title: string = '') {
+	let _info = ''
+	for (let j: number = 0, len: number = idNodes1.length; j < len; j++) {
+		let nodes1 = idNodes1[j];
+		let has = false;
+		for (let i: number = 0; i < idNodes2.length; i++) {
+			let nodes2 = idNodes2[i];
+			if (nodes2.id == nodes1.id) {
+				if (nodes2.type != nodes1.type) {
+					_info += '\n';
+					_info += title + 'ID=' + nodes2.id + '的' + nodes1.type + '的对比文件类型为' + nodes2.type;
+				}
+				if (nodes2.className != nodes1.className) {
+					_info += '\n';
+					_info += title + 'ID=' + nodes2.id + '的' + nodes1.className + '的对比文件类型为' + nodes2.className;
+				}
+				if (nodes1.nodes && nodes2.nodes) {
+					_info += contrastNodes(nodes1.nodes, nodes2.nodes, title + nodes1.id + "|");
+				}
+				idNodes2.splice(i, 1);
+				i--;
+				has = true;
+				break;
+			}
+		}
+		if (!has) {
+			_info += '\n';
+			_info += '"!!!' + title + '多出来的组件==>ID:' + nodes1.id + " type:" + nodes1.type + " className:" + nodes1.className + '"';
+		}
+	}
+	for (let i: number = 0; i < idNodes2.length; i++) {
+		let nodes1 = idNodes2[i];
+		_info += '\n';
+		_info += '"!!!' + title + '缺失组件==>ID:' + nodes1.id + " type:" + nodes1.type + " className:" + nodes1.className + '"';
+	}
+	return _info;
 }
 
 function Uint8ArrayToString(fileData: Uint8Array) {

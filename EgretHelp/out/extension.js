@@ -77,6 +77,35 @@ function activate(context) {
         });
     });
     context.subscriptions.push(disposable);
+    disposable = vscode.commands.registerCommand('HelpTools.contrastExml', () => {
+        console.warn('HelpTools.contrastExml');
+        let skinFolderUri = vscode.Uri.parse(rootUrl() + "/resource/skins/");
+        let skinUrl1, skinUrl2;
+        vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, defaultUri: skinFolderUri, openLabel: "请选择修改后的Exml" }).then(function (skinUri) {
+            if (skinUri === undefined) {
+                return;
+            }
+            if (skinUri[0].path.substring(skinUri[0].path.length - 5) !== ".exml") {
+                return;
+            }
+            skinUrl1 = skinUri[0];
+            vscode.window.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: false, defaultUri: skinFolderUri, openLabel: "请选择要对比的Exml" }).then(function (skinUri) {
+                if (skinUri === undefined) {
+                    return;
+                }
+                if (skinUri[0].path.substring(skinUri[0].path.length - 5) !== ".exml") {
+                    return;
+                }
+                skinUrl2 = skinUri[0];
+                if (skinUrl1.path == skinUrl2.path) {
+                    vscode.window.showErrorMessage('选择的两个Exml文件相同!');
+                    return;
+                }
+                contrastExml(skinUrl1, skinUrl2);
+            });
+        });
+    });
+    context.subscriptions.push(disposable);
 }
 exports.activate = activate;
 function deactivate() { }
@@ -127,6 +156,51 @@ ${skinItem.classInfo}
             vscode.window.showTextDocument(vscode.Uri.file(classUrl));
         });
     });
+}
+function contrastExml(url1, url2) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let idNodes1 = yield analysisTarget(url1);
+        let idNodes2 = yield analysisTarget(url2);
+        let content = contrastNodes(idNodes1, idNodes2);
+        vscode.workspace.openTextDocument({ content });
+    });
+}
+function contrastNodes(idNodes1, idNodes2, title = '') {
+    let _info = '';
+    for (let j = 0, len = idNodes1.length; j < len; j++) {
+        let nodes1 = idNodes1[j];
+        let has = false;
+        for (let i = 0; i < idNodes2.length; i++) {
+            let nodes2 = idNodes2[i];
+            if (nodes2.id == nodes1.id) {
+                if (nodes2.type != nodes1.type) {
+                    _info += '\n';
+                    _info += title + 'ID=' + nodes2.id + '的' + nodes1.type + '的对比文件类型为' + nodes2.type;
+                }
+                if (nodes2.className != nodes1.className) {
+                    _info += '\n';
+                    _info += title + 'ID=' + nodes2.id + '的' + nodes1.className + '的对比文件类型为' + nodes2.className;
+                }
+                if (nodes1.nodes && nodes2.nodes) {
+                    _info += contrastNodes(nodes1.nodes, nodes2.nodes, title + nodes1.id + "|");
+                }
+                idNodes2.splice(i, 1);
+                i--;
+                has = true;
+                break;
+            }
+        }
+        if (!has) {
+            _info += '\n';
+            _info += '"!!!' + title + '多出来的组件==>ID:' + nodes1.id + " type:" + nodes1.type + " className:" + nodes1.className + '"';
+        }
+    }
+    for (let i = 0; i < idNodes2.length; i++) {
+        let nodes1 = idNodes2[i];
+        _info += '\n';
+        _info += '"!!!' + title + '缺失组件==>ID:' + nodes1.id + " type:" + nodes1.type + " className:" + nodes1.className + '"';
+    }
+    return _info;
 }
 function Uint8ArrayToString(fileData) {
     var dataString = "";

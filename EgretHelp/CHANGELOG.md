@@ -1,9 +1,4 @@
 # Change Log
+## [0.0.4]
 
-All notable changes to the "EgretHelp" extension will be documented in this file.
-
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
-
-## [Unreleased]
-
-- Initial release
+- contrastExml 新增对比两个同名exml的结构是否一样(换皮项目用)
